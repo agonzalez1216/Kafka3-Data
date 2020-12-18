@@ -6,6 +6,7 @@ from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import pymysql
+import statistics
 
 Base = declarative_base()
 
@@ -22,7 +23,6 @@ class Transaction(Base):
     type = Column(String(250), nullable=False)
     date = Column(Integer)
     amt = Column(Integer)
-    bal = Column(Integer)
 
 
 class XactionConsumer:
@@ -40,8 +40,9 @@ class XactionConsumer:
         # THE PROBLEM is every time we re-run the Consumer, ALL our customer
         # data gets lost!
         # add a way to connect to your database here.
-        self.engine = create_engine(f'mysql+pymysql://{sql_usr}:{sql_pwd}@localhost:3306/kafka')
-        Base.metadata.create_all(self.engine)
+        self.deps = list()
+        self.wths = list()
+        self.stddev = 0
 
 
 
@@ -57,17 +58,28 @@ class XactionConsumer:
                 self.custBalances[message['custid']] = 0
             if message['type'] == 'dep':
                 self.custBalances[message['custid']] += message['amt']
+                self.deps.append(message['amt'])
             else:
                 self.custBalances[message['custid']] -= message['amt']
+                self.wths.append(message['amt'])
+            avg_deps = 0
+            avg_wths = 0
+            deps_dev = 0
+            wth_dev = 0
+            if len(self.deps) > 0:
+                avg_deps = sum(self.deps)/len(self.deps)
+                if len(self.deps) > 1:
+                    deps_dev = statistics.stdev(self.deps)
+            if len(self.wths) > 0:
+                avg_wths = sum(self.wths)/len(self.wths)
+                if len(self.wths) > 1:
+                    wth_dev = statistics.stdev(self.wths)
             print(self.custBalances)
-            insert = Transaction(custid=message['custid'], type=message['type'],
-                                 date=message['date'], amt=message['amt'],
-                                 bal=self.custBalances[message['custid']])
-            Session = sessionmaker(bind=self.engine)
-            session = Session()
-            session.add(insert)
-            session.commit()
-
+            print(f'Avg deposits{avg_deps}, \n'
+                  f'Avg withdrawals{avg_wths}, \n'
+                  f'Standard Deviation of deposits{deps_dev}, \n'
+                  f'Standard Deviation of withdrawals{wth_dev}')
+            print(self.deps)
 
 if __name__ == "__main__":
     c = XactionConsumer()

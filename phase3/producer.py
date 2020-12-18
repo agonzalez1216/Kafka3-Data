@@ -1,6 +1,6 @@
 from time import sleep
 from json import dumps
-from kafka import KafkaProducer
+from kafka import KafkaProducer,KafkaConsumer
 import time
 import random
 
@@ -23,9 +23,10 @@ class Producer:
 
     def generateRandomXactions(self, n=1000):
         for _ in range(n):
+            partition_id = random.randint(0, 3)
             data = self.emit()
-            print('sent', data)
-            self.producer.send('bank-customer-events', value=data)
+            print('sent', data, partition_id)
+            self.producer.send('bank-customer-new', value=data, partition=partition_id)
             sleep(1)
 
 

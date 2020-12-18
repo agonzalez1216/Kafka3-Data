@@ -1,10 +1,8 @@
 from kafka import KafkaConsumer
 from json import loads
 
-consumer = KafkaConsumer(
-    'test',
-     bootstrap_servers=['localhost:9092'],
-     value_deserializer=lambda m: loads(m.decode('ascii')))
+consumer = KafkaConsumer('test', bootstrap_servers=['localhost:9092'],
+                         value_deserializer=lambda m: loads(m.decode('ascii')))
 
 for message in consumer:
     print(message)

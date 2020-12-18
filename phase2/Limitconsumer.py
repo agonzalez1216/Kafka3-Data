@@ -22,16 +22,12 @@ class Transaction(Base):
     type = Column(String(250), nullable=False)
     date = Column(Integer)
     amt = Column(Integer)
-    bal = Column(Integer)
 
 
 class XactionConsumer:
-    def __init__(self):
-        self.consumer = KafkaConsumer('bank-customer-events',
-            bootstrap_servers=['localhost:9092'],
-            # auto_offset_reset='earliest',
-            value_deserializer=lambda m: loads(m.decode('ascii')))
-        ## These are two python dictionarys
+    def __init__(self, limit):
+        self.consumer = KafkaConsumer('bank-customer-events', bootstrap_servers=['localhost:9092'],
+                                      value_deserializer=lambda m: loads(m.decode('ascii')))
         # Ledger is the one where all the transaction get posted
         self.ledger = {}
         # custBalances is the one where the current blance of each customer
@@ -40,12 +36,7 @@ class XactionConsumer:
         # THE PROBLEM is every time we re-run the Consumer, ALL our customer
         # data gets lost!
         # add a way to connect to your database here.
-        self.engine = create_engine(f'mysql+pymysql://{sql_usr}:{sql_pwd}@localhost:3306/kafka')
-        Base.metadata.create_all(self.engine)
-
-
-
-        #Go back to the readme.
+        self.limit = limit
 
     def handleMessages(self):
         for message in self.consumer:
@@ -58,17 +49,14 @@ class XactionConsumer:
             if message['type'] == 'dep':
                 self.custBalances[message['custid']] += message['amt']
             else:
-                self.custBalances[message['custid']] -= message['amt']
+                if (self.custBalances[message['custid']] - message['amt']) < self.limit:
+                    print("Negative balance limit reached")
+                else:
+                    self.custBalances[message['custid']] -= message['amt']
+
             print(self.custBalances)
-            insert = Transaction(custid=message['custid'], type=message['type'],
-                                 date=message['date'], amt=message['amt'],
-                                 bal=self.custBalances[message['custid']])
-            Session = sessionmaker(bind=self.engine)
-            session = Session()
-            session.add(insert)
-            session.commit()
 
 
 if __name__ == "__main__":
-    c = XactionConsumer()
+    c = XactionConsumer(-5000)
     c.handleMessages()
